@@ -100,6 +100,22 @@ die () {
     exit 1
 } >&2
 
+download_file () {
+    url="$1"
+    destination="$2"
+    case "$downloader" in
+        curl)
+            curl --fail --location --output "$destination" "$url"
+            ;;
+        wget)
+            wget --quiet --output-document="$destination" "$url"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 # OS specific support (must be 'true' or 'false').
 cygwin=false
 msys=false
@@ -113,6 +129,107 @@ case "$( uname )" in                #(
 esac
 
 CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+
+maybe_download_wrapper() {
+    if [ -s "$CLASSPATH" ]; then
+        return 0
+    fi
+
+    WRAPPER_PROPS="$APP_HOME/gradle/wrapper/gradle-wrapper.properties"
+    if [ ! -f "$WRAPPER_PROPS" ]; then
+        echo "Gradle wrapper properties not found: $WRAPPER_PROPS" >&2
+        return 1
+    fi
+
+    distributionUrl="$(grep '^distributionUrl=' "$WRAPPER_PROPS" | cut -d= -f2- | tr -d '\r')"
+    if [ -z "$distributionUrl" ]; then
+        echo "distributionUrl is not defined in $WRAPPER_PROPS" >&2
+        return 1
+    fi
+    distributionUrl="$(printf '%s' "$distributionUrl" | tr -d '\\')"
+
+    version="$(printf '%s' "$distributionUrl" | sed -n 's/.*gradle-\([^\/]*\)-.*/\1/p')"
+    if [ -z "$version" ]; then
+        echo "Unable to parse Gradle version from distributionUrl: $distributionUrl" >&2
+        return 1
+    fi
+
+    mkdir -p "$(dirname "$CLASSPATH")"
+    tmpDir="${TMPDIR:-/tmp}/gradle-wrapper-$$"
+    mkdir -p "$tmpDir"
+
+    tmpJar="$tmpDir/gradle-wrapper.jar"
+
+    download_file() {
+        if command -v curl >/dev/null 2>&1; then
+            curl --fail --location --silent --show-error "$1" --output "$2"
+        elif command -v wget >/dev/null 2>&1; then
+            wget --quiet --output-document="$2" "$1"
+        else
+            return 127
+        fi
+    }
+
+    cleanup_tmp() {
+        rm -rf "$tmpDir"
+    }
+
+    candidates=""
+    if [ -n "$version" ]; then
+        candidates="https://services.gradle.org/distributions/gradle-${version}-wrapper.jar"
+        candidates="$candidates https://services.gradle.org/distributions/gradle-wrapper-${version}.jar"
+        candidates="$candidates https://downloads.gradle.org/distributions/gradle-${version}-wrapper.jar"
+        candidates="$candidates https://downloads.gradle.org/distributions/gradle-wrapper-${version}.jar"
+        candidates="$candidates https://raw.githubusercontent.com/gradle/gradle/v${version}/gradle/wrapper/gradle-wrapper.jar"
+        candidates="$candidates https://raw.githubusercontent.com/gradle/gradle/refs/tags/v${version}/gradle/wrapper/gradle-wrapper.jar"
+    fi
+
+    for candidate in $candidates; do
+        [ -n "$candidate" ] || continue
+        echo "Gradle wrapper JAR missing; downloading from $candidate" >&2
+        if download_file "$candidate" "$tmpJar"; then
+            if [ -s "$tmpJar" ]; then
+                mv "$tmpJar" "$CLASSPATH"
+                cleanup_tmp
+                return 0
+            fi
+        fi
+    done
+
+    # Fallback: fetch the configured distribution and assemble the wrapper JAR
+    tmpZip="$tmpDir/gradle-distribution.zip"
+    echo "Attempting to assemble Gradle wrapper JAR from $distributionUrl" >&2
+    if download_file "$distributionUrl" "$tmpZip"; then
+        if command -v unzip >/dev/null 2>&1; then
+            main_entry=$(unzip -Z1 "$tmpZip" "gradle-${version}/lib/gradle-wrapper.jar" 2>/dev/null | head -n 1)
+            if [ -n "$main_entry" ]; then
+                unzip -qp "$tmpZip" "$main_entry" > "$CLASSPATH"
+                cleanup_tmp
+                return 0
+            fi
+
+            main_plugin=$(unzip -Z1 "$tmpZip" "gradle-${version}/lib/plugins/gradle-wrapper-main-*.jar" 2>/dev/null | head -n 1)
+            shared_lib=$(unzip -Z1 "$tmpZip" "gradle-${version}/lib/gradle-wrapper-shared-*.jar" 2>/dev/null | head -n 1)
+            if [ -n "$main_plugin" ] && [ -n "$shared_lib" ] && command -v jar >/dev/null 2>&1; then
+                unzip -q "$tmpZip" "$main_plugin" -d "$tmpDir"
+                unzip -q "$tmpZip" "$shared_lib" -d "$tmpDir"
+                assembleDir="$tmpDir/assembled"
+                mkdir -p "$assembleDir"
+                (cd "$assembleDir" && jar xf "$tmpDir/$main_plugin")
+                (cd "$assembleDir" && jar xf "$tmpDir/$shared_lib")
+                (cd "$assembleDir" && jar cMf "$CLASSPATH" .)
+                cleanup_tmp
+                return 0
+            fi
+        fi
+    fi
+
+    echo "Unable to download Gradle wrapper JAR. Please ensure curl or wget is installed." >&2
+    cleanup_tmp
+    return 1
+}
+
+maybe_download_wrapper || exit 1
 
 
 # Determine the Java command to use to start the JVM.

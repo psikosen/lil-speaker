@@ -2,6 +2,10 @@
 
 Tracking Kotlin/Android milestones for the on-device Lil Speaker app.
 
+## Active Sprint
+- [x] Upgrade Gradle wrapper and build plugins to align with Gradle 9.1 requirements.
+- [ ] Re-run unit tests and lint checks after build tooling upgrade. _(Blocked: Android SDK not available in CI container)_
+
 ## Foundation
 - [x] Replace Rust workspace with Android Gradle project skeleton.
 - [x] Configure Compose Material 3 theme and launcher assets.
