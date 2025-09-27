@@ -1,0 +1,17 @@
+# Gradle
+.gradle/
+build/
+**/build/
+local.properties
+.gradle
+gradle/wrapper/gradle-wrapper.jar
+
+# Android Studio
+.idea/
+*.iml
+
+# Kotlin
+*.ktlint-cache
+
+# Others
+.DS_Store

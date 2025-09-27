@@ -1,80 +1,86 @@
-# lil-speaker
+# Lil Speaker (Android)
 
-Lil Speaker is a Rust workspace that simulates an on-device conversational assistant stack. It includes modular crates for model downloading, LLM token streaming, text-to-speech synthesis, audio output, and a CLI orchestrator that ties the pieces together with structured logging.
+Lil Speaker is now a fully native Android application written in Kotlin and Jetpack Compose. The app provisions the full on-device assistant stack: it downloads and runs the Liquid AI LFM2 2.6B GGUF model through a bundled `llama.cpp` bridge, segments the streamed tokens for Kitten TTS Nano ONNX playback, and exposes privacy-first controls that honour the Sherlock Protocol logging contract.
+
+## Tech stack
+
+- **Android**: Gradle 8.4, Android Gradle Plugin 8.1, Kotlin 1.9, minSdk 24, targetSdk 34
+- **UI**: Jetpack Compose Material 3 with adaptive color support
+- **State**: `ViewModel` + `StateFlow` coordinate the assistant pipeline
+- **Coroutines**: Kotlin Coroutines orchestrate LLM streaming, downloads, and audio synthesis
+- **Logging**: Structured JSON logs with the required `Continuous skepticism (Sherlock Protocol)` line appended to every entry
+- **Native**: `llama.cpp` compiled at build time via CMake/NDK for GGUF inference
+- **Inference runtimes**: ONNX Runtime Mobile drives the Kitten TTS Nano 0.2 voice model
 
 ## Features
 
-- **Model management** — resumable downloads with SHA-256 verification and license notices for required model artifacts.
-- **LLM bigram engine** — ChatML-inspired templating, streaming tokens, and performance profiles (Battery/Balanced/Turbo) with telemetry.
-- **Token segmentation & TTS** — grapheme-to-phoneme mapping, sine-wave synthesis, and barge-in ready audio queueing.
-- **Audio pipeline** — Stream audio chunks into timestamped WAV files with cancellation support.
-- **Command-line orchestrator** — Runs the full conversation loop, selects model variants, and exposes environment knobs for voice and performance tuning.
-- **Observability** — Canonical JSON logs that include the Sherlock Protocol human-readable line for every event.
+- **Composable chat surface** — Streaming-friendly layout with a bottom composer, live assistant bubble, and playback controls.
+- **On-device LLM** — LFM2 2.6B (GGUF) streaming via native `llama.cpp` with ChatML formatting and performance presets.
+- **Segmented voice pipeline** — Token segmenter feeds Kitten TTS Nano 0.2 over ONNX Runtime into a low-latency AudioTrack player with barge-in support.
+- **Model management** — Resumable downloads with SHA-256 verification for GGUF, ONNX, and voice assets stored under app-private storage.
+- **Privacy-first controls** — In-app telemetry and diagnostics toggles backed by Jetpack DataStore and surfaced in the top app bar.
+- **Test coverage** — Unit suites for segmentation and phoneme encoding plus Compose instrumentation tests for UI affordances.
 
 ## Getting started
 
-### Prerequisites
-
-- Rust toolchain (tested with 1.82+)
-- Internet access for the initial asset download executed by the CLI
-
-### Build & test
-
-```bash
-cargo fmt
-cargo clippy --all-targets -- -D warnings
-cargo test
-```
-
-### Running the assistant
-
-```bash
-cargo run -p app -- "Explain offline-first privacy guidance"
-```
-
-Optional environment variables:
-
-- `LIL_SPEAKER_PROFILE` — `battery`, `balanced` (default), or `turbo`.
-- `LIL_SPEAKER_MODEL` — `lfm2-q4_0` (default) or `lfm2-q2_k` to switch variants.
-- `LIL_SPEAKER_VOICE` — custom voice identifier string.
-- `LIL_SPEAKER_SPEED` — float multiplier (0.5–2.0) for speech rate.
-- `LIL_SPEAKER_GAIN` — float gain (0.1–1.2) for output amplitude.
-
-Generated audio segments are stored under the platform data directory (e.g., `~/.local/share/lil-speaker/audio_sessions`).
-
-## Required assets
-
-| Asset ID        | Filename                     | Source URL                                                                 | SHA-256                                                             | Notes                              |
-|-----------------|------------------------------|---------------------------------------------------------------------------|---------------------------------------------------------------------|------------------------------------|
-| `lfm2-q4_0`     | `lfm2_q4_0.gguf`             | https://huggingface.co/datasets/hf-internal-testing/fixtures/resolve/main/hello.txt | `45b71fe98efe5f530b825dce6f5049d738e9c16869f10be4370ab81a9912d4a6` | Default LFM2 prompt corpus stub    |
-| `lfm2-q2_k`     | `lfm2_q2_k.gguf`             | https://huggingface.co/datasets/hf-internal-testing/fixtures/resolve/main/hello.txt | `45b71fe98efe5f530b825dce6f5049d738e9c16869f10be4370ab81a9912d4a6` | Memory-constrained fallback stub   |
-| `kitten-tts-nano` | `kitten_tts_nano_v0_2.onnx` | https://github.com/onnx/models/raw/main/vision/classification/mnist/model/mnist-8.onnx?download=1 | `847cc4343bf3665bac366061f9271516bca9f8f73ea18a75c5575b9616a26337` | ONNX sample used for TTS pipeline  |
-| `voices-map`    | `voices.npz`                 | https://github.com/scipy/scipy/raw/main/doc/source/tutorial/data/face.npz | `e825bb68da30c60d886f57e20ba8920320a64c666676c42f6a80dd36e56b665b` | Voice palette sample data          |
-
-All assets are downloaded to the platform data directory and accompanied by license notices under `licenses/`.
+1. Install the Android SDK (API 34) and ensure `JAVA_HOME` points to JDK 17.
+2. Provide NDK r26c or newer so Gradle can compile the bundled `llama.cpp` bridge during the build.
+3. From the repository root run:
+   ```bash
+   ./gradlew test
+   ```
+4. To launch the debug build on a device or emulator (models download on first run):
+   ```bash
+   ./gradlew installDebug
+   ```
 
 ## Project layout
 
 ```
-apps/app                 CLI entrypoint
-crates/audio_io          Audio sink & WAV streaming
-crates/chat_ui           Conversation controller & streaming UI logic
-crates/instrumentation   Structured logging helpers
-crates/llm_core          Bigram LLM engine with profiles
-crates/models_downloader Asset downloader and manifest manager
-crates/tts_core          Token segmentation and TTS synthesis
+app/
+  src/main/java/com/example/lilspeaker/
+    core/logging/    -> Canonical logging helper
+    features/assistant/ -> LLM+TTS orchestration pipeline
+    features/chat/   -> ViewModel, state, and Compose UI
+    features/download/ -> Model downloader with checksum verification
+    features/llm/    -> llama.cpp bridge and prompt formatter
+    features/privacy/ -> DataStore-backed telemetry controls
+    features/tts/    -> Token segmenter, Kitten ONNX runtime, AudioTrack playback
+    ui/theme/        -> Material theme definitions
+    LilSpeakerApp.kt -> Application entry point
+    MainActivity.kt  -> Compose host activity
 ```
 
-## Logging
+## Logging contract
 
-Logs are emitted in JSON with the canonical schema, and each entry contains the Sherlock Protocol note. Set `RUST_LOG=debug` to increase verbosity.
+Each log entry follows the JSON schema:
+
+```json
+{
+  "filename": "ChatViewModel",
+  "timestamp": "2024-01-01T12:00:00.000Z",
+  "classname": "ChatViewModel",
+  "function": "sendMessage",
+  "system_section": "chat_pipeline",
+  "line_num": 42,
+  "error": "",
+  "db_phase": "none",
+  "method": "NONE",
+  "message": "User submitted message"
+}
+```
+
+Immediately after the JSON payload the logger prints the human-readable line exactly as required:
+
+```
+[Continuous skepticism (Sherlock Protocol)] User submitted message
+```
 
 ## Continuous skepticism (Sherlock Protocol)
 
-When extending the system, evaluate:
+Before merging any feature, double check:
 
 1. Could the change affect unexpected files or systems?
 2. Are there hidden dependencies or cascades?
-3. What edge cases and failure modes remain unhandled?
+3. What edge cases and failure modes are unhandled?
 4. If stuck, work backward from the desired outcome.
-
