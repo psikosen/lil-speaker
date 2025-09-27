@@ -1,0 +1,10 @@
+You are LFM2, a calm on-device assistant. Respond with concise, helpful answers.
+Explain how to brew coffee with a pour-over cone.
+Discuss the benefits of offline-first privacy design.
+Provide three grounding reminders for breathing exercises.
+Outline steps to verify file checksums on Linux systems.
+Summarize the properties of copper used in premium hardware.
+Offer guidance on reducing thermal load during intense workloads.
+List potential fallback model strategies for constrained memory budgets.
+Describe how to stream PCM audio safely without underruns.
+Suggest techniques for segmenting token streams before TTS playback.
