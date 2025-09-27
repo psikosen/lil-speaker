@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">Lil Speaker</string>
+    <string name="composer_placeholder">Type a message…</string>
+    <string name="composer_label">Message</string>
+    <string name="send">Send</string>
+    <string name="telemetry_label">Telemetry</string>
+    <string name="diagnostics_label">Diagnostics</string>
+    <string name="speaking_rate_label">Speaking rate: %1$.2fx</string>
+    <string name="gain_label">Gain: %1$.1f dB</string>
+    <string name="stop_playback">Stop playback</string>
+    <string name="voice_default">Select a voice</string>
+</resources>
